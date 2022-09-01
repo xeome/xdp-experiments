@@ -1,17 +1,24 @@
 #include <stdint.h>
 #include <arpa/inet.h>
 #include <linux/bpf.h>
+#include <bpf/bpf_helpers.h>
+#include <linux/icmp.h>
 #include <linux/if_ether.h>
 #include <linux/ip.h>
-#include <linux/icmp.h>
+#include <linux/ipv6.h>
+#include <linux/tcp.h>
 
-#define SEC(NAME) __attribute__((section(NAME), used))
 
 #define OVER(x, d) (x + 1 > (typeof(x))d)
 
-/* from bpf_helpers.h */
-static unsigned long long (*bpf_get_prandom_u32)(void) =
-	(void *) BPF_FUNC_get_prandom_u32;
+
+struct bpf_map_def SEC("maps") cnt = {
+    .type = BPF_MAP_TYPE_HASH,
+    .key_size = sizeof(__be32),
+    .value_size = sizeof(long),
+    .max_entries = 65536,
+};
+
 
 static inline void csum_replace2(uint16_t *sum, uint16_t old, uint16_t new)
 {
@@ -31,8 +38,11 @@ int xdp_prog_simple(struct xdp_md *ctx)
 {
 	void *data_end = (void *)(uintptr_t)ctx->data_end;
 	void *data = (void *)(uintptr_t)ctx->data;
-	uint8_t old_ttl;
-
+	
+    uint8_t old_ttl;
+    long *value;
+    
+    /* Define headers */
 	struct ethhdr *eth = data;
 	struct iphdr *iph = (struct iphdr *)(eth + 1);
 	struct icmphdr *icmph = (struct icmphdr *)(iph + 1);
@@ -57,8 +67,24 @@ int xdp_prog_simple(struct xdp_md *ctx)
 		return XDP_PASS;
 
 	/* drop icmp */
-	if (iph->protocol == IPPROTO_ICMP)
-		return XDP_DROP;
+	if (iph->protocol == IPPROTO_ICMP){
+        /* Get source address */
+        __be32 source = iph->saddr;
+        /* Get value pointer address*/
+        value = bpf_map_lookup_elem(&cnt, &source);
+
+        if (value) {
+            *value += 1;
+        } else {
+            long temp = 1;
+            bpf_map_update_elem(&cnt, &source, &temp, BPF_ANY);
+        }
+
+        if (value && *value > 5)
+            return XDP_DROP;
+
+        return XDP_PASS;
+    }
 
 	/* set the TTL to a pseudorandom number 1..255 */
 	old_ttl = iph->ttl;
