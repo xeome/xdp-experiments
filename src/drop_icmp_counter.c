@@ -67,7 +67,7 @@ int xdp_prog_simple(struct xdp_md *ctx)
 		return XDP_PASS;
 
 	/* drop icmp */
-	if (iph->protocol == IPPROTO_ICMP){
+    if (iph->protocol == IPPROTO_ICMP) {
         /* Get source address */
         __be32 source = iph->saddr;
         /* Get value pointer address*/
@@ -86,7 +86,7 @@ int xdp_prog_simple(struct xdp_md *ctx)
         return XDP_PASS;
     }
 
-	/* set the TTL to a pseudorandom number 1..255 */
+    /* set the TTL to a pseudorandom number 1..255 */
 	old_ttl = iph->ttl;
 	iph->ttl = bpf_get_prandom_u32() & 0xff ?: 1;
 
