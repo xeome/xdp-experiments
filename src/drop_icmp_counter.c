@@ -8,7 +8,6 @@
 #include <linux/ipv6.h>
 #include <linux/tcp.h>
 
-
 #define OVER(x, d) (x + 1 > (typeof(x))d)
 
 /* Creating a BPF map for counting ICMP packets as described above */
@@ -19,20 +18,6 @@ struct bpf_map_def SEC("maps") cnt = {
     .max_entries = 65536,
 };
 
-
-static inline void csum_replace2(uint16_t *sum, uint16_t old, uint16_t new)
-{
-	uint16_t csum = ~*sum;
-
-	csum += ~old;
-	csum += csum < (uint16_t)~old;
-
-	csum += new;
-	csum += csum < (uint16_t)new;
-
-	*sum = ~csum;
-}
-
 SEC("prog")
 int xdp_prog_simple(struct xdp_md *ctx)
 {
@@ -42,7 +27,6 @@ int xdp_prog_simple(struct xdp_md *ctx)
 	void *data_end = (void *)(uintptr_t)ctx->data_end;
 	void *data = (void *)(uintptr_t)ctx->data;
 	
-    uint8_t old_ttl;
     long *value;
     
     /* Define headers */
@@ -117,14 +101,7 @@ int xdp_prog_simple(struct xdp_md *ctx)
 
         return XDP_PASS;
     }
-
-    /* set the TTL to a pseudorandom number 1..255 */
-	old_ttl = iph->ttl;
-	iph->ttl = bpf_get_prandom_u32() & 0xff ?: 1;
-
-	/* recalculate the checksum, otherwise the IP stack wil drop it */
-	csum_replace2(&iph->check, htons(old_ttl << 8), htons(iph->ttl << 8));
-
+    
 	return XDP_PASS;
 }
 

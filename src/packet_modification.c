@@ -10,6 +10,19 @@
 
 #define OVER(x, d) (x + 1 > (typeof(x))d)
 
+static inline void csum_replace2(uint16_t *sum, uint16_t old, uint16_t new)
+{
+	uint16_t csum = ~*sum;
+
+	csum += ~old;
+	csum += csum < (uint16_t)~old;
+
+	csum += new;
+	csum += csum < (uint16_t)new;
+
+	*sum = ~csum;
+}
+
 SEC("prog")
 int xdp_prog_simple(struct xdp_md *ctx)
 {
@@ -18,7 +31,8 @@ int xdp_prog_simple(struct xdp_md *ctx)
     to perform the casts */
     void *data_end = (void *)(uintptr_t)ctx->data_end;
     void *data = (void *)(uintptr_t)ctx->data;
-    
+    uint8_t old_ttl;
+
     struct ethhdr *eth = data;
     struct iphdr *iph = (struct iphdr *)(eth + 1);
     struct icmphdr *icmph = (struct icmphdr *)(iph + 1);
@@ -42,37 +56,13 @@ int xdp_prog_simple(struct xdp_md *ctx)
     if (OVER(icmph, data_end))
         return XDP_DROP;
 
-    /* 
-	struct iphdr {
-	#if defined(__LITTLE_ENDIAN_BITFIELD)
-		__u8	ihl:4,
-			version:4;
-	#elif defined (__BIG_ENDIAN_BITFIELD)
-		__u8	version:4,
-  			ihl:4;
-	#else
-	#error	"Please fix <asm/byteorder.h>"
-	#endif
-		__u8	tos;
-		__be16	tot_len;
-		__be16	id;
-		__be16	frag_off;
-		__u8	ttl;
-		__u8	protocol;
-		__sum16	check;
-		__be32	saddr;
-		__be32	daddr;     
-	}; 
-	This is the ipheader structure from ip.h; we can see the elements we can access 
-    and their types. We can use iph->protocol to determine whether an incoming 
-    packet is an ICMP packet or not. */
-    if (iph->protocol != IPPROTO_ICMP)
-        return XDP_PASS;
+    /* set the TTL to a pseudorandom number 1..255 */
+    old_ttl = iph->ttl;
+    iph->ttl = bpf_get_prandom_u32() & 0xff ?: 1;
 
-    /* drop icmp */
-    if (iph->protocol == IPPROTO_ICMP)
-        return XDP_DROP;
-    
+    /* recalculate the checksum, otherwise the IP stack will drop it */
+    csum_replace2(&iph->check, htons(old_ttl << 8), htons(iph->ttl << 8));
+
     return XDP_PASS;
 }
 
