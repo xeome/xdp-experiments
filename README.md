@@ -4,4 +4,4 @@
 This repo now also contains my own XDP creations outside of the bootcamp.  
 
 Documentation I write about XDP:  
-https://xeome.github.io/notes/XDP-Tutorial/
+https://notes.xeome.dev/notes/XDP-Tutorial
