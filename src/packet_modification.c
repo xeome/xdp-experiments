@@ -10,32 +10,30 @@
 
 #define OVER(x, d) (x + 1 > (typeof(x))d)
 
-static inline void csum_replace2(uint16_t *sum, uint16_t old, uint16_t new)
-{
-	uint16_t csum = ~*sum;
+static inline void csum_replace2(uint16_t* sum, uint16_t old, uint16_t new) {
+    uint16_t csum = ~*sum;
 
-	csum += ~old;
-	csum += csum < (uint16_t)~old;
+    csum += ~old;
+    csum += csum < (uint16_t)~old;
 
-	csum += new;
-	csum += csum < (uint16_t)new;
+    csum += new;
+    csum += csum < (uint16_t) new;
 
-	*sum = ~csum;
+    *sum = ~csum;
 }
 
 SEC("prog")
-int xdp_prog_simple(struct xdp_md *ctx)
-{
+int xdp_prog_simple(struct xdp_md* ctx) {
     /* data and data_end are pointers to the beginning and end of the packet’s raw
     memory. Note that ctx->data and ctx->data_end are of type __u32, so we have
     to perform the casts */
-    void *data_end = (void *)(uintptr_t)ctx->data_end;
-    void *data = (void *)(uintptr_t)ctx->data;
+    void* data_end = (void*)(long)ctx->data_end;
+    void* data = (void*)(long)ctx->data;
     uint8_t old_ttl;
 
-    struct ethhdr *eth = data;
-    struct iphdr *iph = (struct iphdr *)(eth + 1);
-    struct icmphdr *icmph = (struct icmphdr *)(iph + 1);
+    struct ethhdr* eth = data;
+    struct iphdr* iph = (struct iphdr*)(eth + 1);
+    struct icmphdr* icmph = (struct icmphdr*)(iph + 1);
 
     /* sanity check needed by the eBPF verifier
     When accessing the data in struct ethhdr, we must make sure we don't
